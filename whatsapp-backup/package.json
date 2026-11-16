@@ -1,0 +1,29 @@
+{
+  "name": "whatsapp-backup",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Read-only WhatsApp group backup to Google Drive for Excel Roofing.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "NODE_OPTIONS='--disable-warning=ExperimentalWarning' node dist/index.js",
+    "dev": "node --experimental-strip-types src/index.ts",
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "demo": "node --experimental-strip-types src/demo.ts",
+    "auth": "node --experimental-strip-types src/cli/auth.ts",
+    "status": "node --experimental-strip-types src/cli/status.ts"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "7.0.0-rc14",
+    "pino": "^9.6.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "@types/qrcode": "^1.5.5",
+    "typescript": "^5.8.3"
+  }
+}

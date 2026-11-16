@@ -8,6 +8,7 @@ set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 DATA_DIR="${DATA_DIR:-$ROOT/data}"
+WHATSAPP_DIR="${WHATSAPP_DIR:-/whatsapp}"
 RETENTION="${BACKUP_RETENTION_DAYS:-30}"
 INTERVAL="${BACKUP_INTERVAL_SECONDS:-86400}"
 REMOTE="${RCLONE_REMOTE:-}"
@@ -17,9 +18,53 @@ if [ -f /config/rclone/rclone.conf ]; then
   export RCLONE_CONFIG=/config/rclone/rclone.conf
 fi
 
+copy_whatsapp() {
+  dest="$1"
+  if [ ! -d "$WHATSAPP_DIR" ]; then
+    echo "excel-jobs backup: WhatsApp disk not mounted ($WHATSAPP_DIR). Skipping."
+    return 0
+  fi
+  if [ ! -f "$WHATSAPP_DIR/backup.db" ] && [ ! -d "$WHATSAPP_DIR/session" ]; then
+    echo "excel-jobs backup: WhatsApp disk is empty. Skipping."
+    return 0
+  fi
+  echo "excel-jobs backup: include WhatsApp session, queue, and files still waiting"
+  out="$dest/whatsapp"
+  mkdir -p "$out"
+  if [ -f "$WHATSAPP_DIR/backup.db" ]; then
+    if ! WHATSAPP_DB="$WHATSAPP_DIR/backup.db" WHATSAPP_DB_OUT="$out/backup.db" node --input-type=module <<'EOF'
+import { DatabaseSync } from "node:sqlite";
+const src = process.env.WHATSAPP_DB;
+const dest = process.env.WHATSAPP_DB_OUT;
+const db = new DatabaseSync(src);
+db.exec(`VACUUM INTO '${dest.replaceAll("'", "''")}'`);
+db.close();
+EOF
+    then
+      echo "excel-jobs backup: WhatsApp database copy used a plain file copy" >&2
+      cp -a "$WHATSAPP_DIR/backup.db" "$out/backup.db"
+      if [ -f "$WHATSAPP_DIR/backup.db-wal" ]; then cp -a "$WHATSAPP_DIR/backup.db-wal" "$out/backup.db-wal"; fi
+      if [ -f "$WHATSAPP_DIR/backup.db-shm" ]; then cp -a "$WHATSAPP_DIR/backup.db-shm" "$out/backup.db-shm"; fi
+    fi
+  fi
+  for item in session inbox logs; do
+    if [ -e "$WHATSAPP_DIR/$item" ]; then
+      cp -a "$WHATSAPP_DIR/$item" "$out/$item"
+    fi
+  done
+}
+
 run_once() {
   echo "excel-jobs backup: local copy"
-  node "$ROOT/scripts/backup.mjs"
+  node "$ROOT/scripts/backup.mjs" > /tmp/excel-backup-path
+  dest=$(cat /tmp/excel-backup-path)
+  rm -f /tmp/excel-backup-path
+  echo "$dest"
+  if [ ! -d "$dest" ]; then
+    echo "excel-jobs backup: local copy did not report a folder" >&2
+    exit 1
+  fi
+  copy_whatsapp "$dest"
 
   if [ -d "$DATA_DIR/backups" ]; then
     find "$DATA_DIR/backups" -mindepth 1 -maxdepth 1 -type d -mtime +"$RETENTION" -exec rm -rf {} +

@@ -1,7 +1,14 @@
 import { actor, fail, field, json, readRequest, redirectTo } from "@/lib/http";
+import { listTags } from "@/lib/queries";
 import { moveTag, saveTag } from "@/lib/services";
 
 export const dynamic = "force-dynamic";
+
+export async function GET() {
+  const auth = await actor();
+  if ("error" in auth) return auth.error;
+  return json({ tags: await listTags() });
+}
 
 export async function POST(request: Request) {
   const auth = await actor();

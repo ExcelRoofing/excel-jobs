@@ -1,6 +1,6 @@
 # Production stack for one Ubuntu VPS.
 # The app is only on 127.0.0.1:3000. Caddy is the public HTTPS front.
-# A WhatsApp backup service (separate PR) can be added above the volumes block.
+# WhatsApp backup stays off until: docker compose --profile whatsapp up -d --build
 
 services:
   excel-jobs:
@@ -41,13 +41,36 @@ services:
         required: false
     environment:
       DATA_DIR: /data
+      WHATSAPP_DIR: /whatsapp
     volumes:
       - excel-jobs-data:/data
+      - whatsapp-backup-data:/whatsapp
       - ./deploy/rclone:/config/rclone:ro
     entrypoint: ["/app/scripts/backup-offsite.sh"]
     restart: unless-stopped
 
+  # Spare-phone WhatsApp backup. Off unless you ask for it.
+  # Create whatsapp-backup/.env first. See whatsapp-backup/README.md.
+  whatsapp-backup:
+    profiles: ["whatsapp"]
+    build: ./whatsapp-backup
+    env_file:
+      - path: ./whatsapp-backup/.env
+        required: false
+    environment:
+      # .env may say ./data or HOST=127.0.0.1 for a laptop.
+      # Inside the container the disk is /data. The port is published only on 127.0.0.1.
+      DATA_DIR: /data
+      HOST: "0.0.0.0"
+      PORT: "8787"
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - whatsapp-backup-data:/data
+    restart: unless-stopped
+
 volumes:
   excel-jobs-data:
+  whatsapp-backup-data:
   caddy-data:
   caddy-config:

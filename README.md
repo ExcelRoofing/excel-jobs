@@ -123,13 +123,14 @@ Tag folders use the English tag name so the whole company shares one filing lang
 
 This is the production layout for one Ubuntu 24.04 VPS (the one in Beauharnois is a good fit). Run **one** copy of the app. Chat delivery is in-memory on that process. Do not point two copies at the same SQLite file.
 
-Docker Compose does three things:
+Docker Compose does four things:
 
 - `excel-jobs` listens only on `127.0.0.1:3000`. The public internet cannot open that port.
 - `caddy` takes ports 80 and 443, gets a Let's Encrypt certificate for `APP_DOMAIN`, and proxies to the app.
-- `backup` makes a local copy every day and, when `RCLONE_REMOTE` is set, copies it off the server.
+- `backup` makes a local copy every day and, when `RCLONE_REMOTE` is set, copies it off the server. That copy includes the WhatsApp login when that disk has one.
+- `whatsapp-backup` is optional. `docker compose --profile whatsapp up -d --build` starts it. It listens only on `127.0.0.1:8787` and reads `whatsapp-backup/.env`.
 
-`.env` is passed into the app and the backup container with `env_file`. `DATA_DIR` is forced to `/data` inside those containers so a laptop value of `./data` does not leak in. Photo tags and the two checklist templates are still created on an empty database. Demo people and demo jobs are not, when `SEED_DEMO=off`.
+`.env` is passed into the app and the backup container with `env_file`. The WhatsApp service uses `env_file` on `whatsapp-backup/.env`. `DATA_DIR` is forced to `/data` inside those containers so a laptop value of `./data` does not leak in. Photo tags and the two checklist templates are still created on an empty database. Demo people and demo jobs are not, when `SEED_DEMO=off`.
 
 ```bash
 cp .env.example .env
@@ -162,7 +163,7 @@ No Roofr key, GoHighLevel key, or email provider is required. Invites are links 
 
 The `backup` container runs `scripts/backup-offsite.sh` every 24 hours. Each run:
 
-1. Copies the database with `VACUUM INTO`, plus `blobs/`, `library/`, and `vapid.json`, into `/data/backups/<timestamp>/`.
+1. Copies the database with `VACUUM INTO`, plus `blobs/`, `library/`, and `vapid.json`, into `/data/backups/<timestamp>/`. When the WhatsApp disk has a login, the same folder also gets `whatsapp/`: the session (the spare-phone login), a consistent copy of its queue database, and any `inbox` or `logs` files still waiting to reach Drive. That session is a key to the spare WhatsApp, so the off-server copy has to stay as private as the server disk.
 2. Deletes local backup folders older than `BACKUP_RETENTION_DAYS` (default 30).
 3. If `RCLONE_REMOTE` is set, copies that folder off the server with rclone and deletes remote files older than the same number of days.
 
@@ -229,6 +230,10 @@ GOOGLE_DRIVE_ROOT_FOLDER_ID=the-folder-id
 ```
 
 New uploads then go to `Job name / Tag`. The server copy remains the source of truth if Drive is down. The file is still saved, and the job shows that the Drive copy did not finish.
+
+## WhatsApp group backup
+
+A separate small service in `whatsapp-backup/` can sit on this same server. It logs into a spare WhatsApp number (one you add to the job groups), saves photos, videos, voice notes, and documents to Google Drive, and can optionally copy a file onto the matching job here. It never sends chat messages. Its settings live in `whatsapp-backup/.env`, which Compose passes in with `env_file`. The daily off-server backup includes the WhatsApp login and any files still waiting to upload. Setup, cost, and the risk of Meta blocking that spare number are in [whatsapp-backup/README.md](whatsapp-backup/README.md).
 
 ## Cloudflare R2 or S3
 
