@@ -1,19 +1,53 @@
+# Production stack for one Ubuntu VPS.
+# The app is only on 127.0.0.1:3000. Caddy is the public HTTPS front.
+# A WhatsApp backup service (separate PR) can be added above the volumes block.
+
 services:
   excel-jobs:
     build: .
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - path: .env
+        required: false
     environment:
-      SESSION_SECRET: ${SESSION_SECRET:-change-me}
-      APP_URL: ${APP_URL:-http://localhost:3000}
+      # .env may say ./data for a laptop. Inside the container the disk is /data.
       DATA_DIR: /data
-      DEMO_HINTS: ${DEMO_HINTS:-on}
-      COOKIE_SECURE: ${COOKIE_SECURE:-off}
-      DRIVE_SYNC: ${DRIVE_SYNC:-off}
-      STORAGE: ${STORAGE:-local}
+      PORT: "3000"
     volumes:
       - excel-jobs-data:/data
     restart: unless-stopped
 
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:-}
+      ACME_EMAIL: ${ACME_EMAIL:-info@excelroofing.ca}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - excel-jobs
+    restart: unless-stopped
+
+  backup:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - excel-jobs-data:/data
+      - ./deploy/rclone:/config/rclone:ro
+    entrypoint: ["/app/scripts/backup-offsite.sh"]
+    restart: unless-stopped
+
 volumes:
   excel-jobs-data:
+  caddy-data:
+  caddy-config:

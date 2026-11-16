@@ -1,0 +1,10 @@
+{
+	email {$ACME_EMAIL:info@excelroofing.ca}
+}
+
+# APP_DOMAIN=jobs.excelroofing.ca turns on Let's Encrypt.
+# With no APP_DOMAIN, Caddy only answers http://localhost (the app is still on 127.0.0.1:3000).
+{$APP_DOMAIN:http://localhost} {
+	encode gzip
+	reverse_proxy excel-jobs:3000
+}
