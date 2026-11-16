@@ -1,0 +1,16 @@
+FROM node:22-bookworm-slim
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends rclone ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+RUN npm run build && npm prune --omit=dev
+ENV NODE_ENV=production
+ENV DATA_DIR=/data
+ENV PORT=3000
+VOLUME /data
+EXPOSE 3000
+CMD ["npm", "start"]
