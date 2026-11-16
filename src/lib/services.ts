@@ -35,6 +35,7 @@ export class AppError extends Error {
 }
 
 const PHOTO = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const VIDEO = new Set(["video/mp4", "video/webm", "video/quicktime"]);
 const DOCS = new Set([
   ...PHOTO,
   "application/pdf",
@@ -54,6 +55,9 @@ export function normalizeMime(filename: string, mime: string) {
     png: "image/png",
     webp: "image/webp",
     gif: "image/gif",
+    mp4: "video/mp4",
+    mov: "video/quicktime",
+    webm: "video/webm",
     pdf: "application/pdf",
     txt: "text/plain",
     doc: "application/msword",
@@ -74,6 +78,10 @@ export function libraryRelative(job: { id: string; name: string }, folder: strin
 export function folderFor(kind: FileKind, tagNameEn: string | null) {
   if (kind === "document") return "Documents";
   if (kind === "chat") return "Chat";
+  if (kind === "video") return "Videos";
+  if (kind === "comparison") return "Before and After";
+  if (kind === "markup") return "Markup";
+  if (kind === "report") return "Reports";
   return tagNameEn || "Untagged";
 }
 
@@ -142,6 +150,8 @@ export async function createJob(
   });
   const job = await getJob(id);
   if (!job) throw new AppError("server_error", 500);
+  const { placeJob } = await import("./media");
+  await placeJob(job.id);
   for (const crewId of input.crewIds || []) {
     if (crewId && crewId !== actor.id) await notifyAdded(crewId, job);
   }
@@ -278,7 +288,7 @@ async function notifyAdded(userId: string, job: Job) {
 }
 
 export async function saveUploadedFile(opts: {
-  actor: User;
+  actor: User | null;
   job: Job;
   kind: FileKind;
   bytes: Buffer;
@@ -293,18 +303,24 @@ export async function saveUploadedFile(opts: {
   customerVisible?: boolean;
   clientId?: string | null;
   notify?: boolean;
+  derivedFromId?: string | null;
+  durationSeconds?: number | null;
+  extraTagIds?: string[];
 }) {
   await ready();
   const mime = normalizeMime(opts.filename, opts.mime);
-  if (opts.bytes.length > 20 * 1024 * 1024) throw new AppError("file_too_large");
+  const limit = opts.kind === "video" ? 40 * 1024 * 1024 : 20 * 1024 * 1024;
+  if (opts.bytes.length > limit) throw new AppError("file_too_large");
   if (opts.clientId) {
     const existing = await getFileByClientId(opts.clientId);
     if (existing) return existing;
   }
   let kind = opts.kind;
-  if (kind === "document" && !canManage(opts.actor.role)) throw new AppError("forbidden", 403);
-  const allowed = kind === "document" || kind === "chat" ? DOCS : PHOTO;
-  if (!allowed.has(mime) && !(kind !== "photo" && mime === "application/vnd.ms-excel")) throw new AppError("bad_file");
+  if ((kind === "document" || kind === "report") && !(opts.actor && canManage(opts.actor.role))) throw new AppError("forbidden", 403);
+  const imageKind = kind === "photo" || kind === "comparison" || kind === "markup";
+  const allowed = kind === "video" ? VIDEO : kind === "document" || kind === "chat" || kind === "report" ? DOCS : PHOTO;
+  if (kind === "report" && mime !== "application/pdf") throw new AppError("bad_file");
+  if (!allowed.has(mime) && !(kind === "document" && mime === "application/vnd.ms-excel")) throw new AppError("bad_file");
   let tagId = opts.tagId || null;
   let tagName: string | null = null;
   if (kind === "photo") {
@@ -318,9 +334,10 @@ export async function saveUploadedFile(opts: {
     else {
       tagName = tag.nameEn;
       if (PHOTO.has(mime) && kind === "chat") kind = "photo";
+      else if (!imageKind && !PHOTO.has(mime)) tagName = tag.nameEn;
     }
   }
-  const customerVisible = canManage(opts.actor.role) && opts.customerVisible ? 1 : 0;
+  const customerVisible = opts.actor && canManage(opts.actor.role) && opts.customerVisible ? 1 : 0;
   const id = randomUUID();
   const now = nowIso();
   const folder = folderFor(kind, tagName);
@@ -329,8 +346,9 @@ export async function saveUploadedFile(opts: {
   run(
     `INSERT INTO files (
       id, job_id, kind, storage_key, filename, mime, size, tag_id, note, taken_at,
-      latitude, longitude, gps_accuracy, customer_visible, uploaded_by, created_at, library_path, client_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      latitude, longitude, gps_accuracy, customer_visible, uploaded_by, created_at, library_path, client_id,
+      derived_from_id, duration_seconds
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     opts.job.id,
     kind,
@@ -345,11 +363,17 @@ export async function saveUploadedFile(opts: {
     finite(opts.longitude),
     finite(opts.gpsAccuracy),
     customerVisible,
-    opts.actor.id,
+    opts.actor ? opts.actor.id : null,
     now,
     relative,
     opts.clientId || null,
+    opts.derivedFromId || null,
+    finite(opts.durationSeconds),
   );
+  if (tagId) run("INSERT OR IGNORE INTO file_tags (file_id, tag_id) VALUES (?, ?)", id, tagId);
+  for (const extra of opts.extraTagIds || []) {
+    if (extra) run("INSERT OR IGNORE INTO file_tags (file_id, tag_id) VALUES (?, ?)", id, extra);
+  }
   await putBlob(id, opts.bytes, mime);
   try {
     writeLibrary(relative, opts.bytes);
@@ -358,7 +382,15 @@ export async function saveUploadedFile(opts: {
   }
   touchJob(opts.job.id, now);
   await mirrorDrive(id, opts.job.name, folder, `${id.slice(0, 8)}-${safeName}`, mime, opts.bytes);
-  if (opts.notify !== false && kind === "photo") await notifyPhoto(opts.actor, opts.job, tagName || folder);
+  if (opts.actor && opts.notify !== false && (kind === "photo" || kind === "video")) await notifyPhoto(opts.actor, opts.job, tagName || folder);
+  const { logActivity } = await import("./media");
+  logActivity({
+    userId: opts.actor?.id ?? null,
+    jobId: opts.job.id,
+    fileId: id,
+    kind: kind === "video" ? "video" : kind === "comparison" ? "comparison" : kind === "markup" ? "markup" : "photo",
+    summary: `${opts.actor?.name || "Guest"}: ${opts.job.name}`,
+  });
   return (await getFile(id)) as JobFile;
 }
 
@@ -554,17 +586,34 @@ async function notifyMessage(actor: User, job: Job, message: { id: string; body:
   }
 }
 
-export async function createShare(actor: User, job: Job, rotate = false) {
+export async function createShare(
+  actor: User,
+  job: Job,
+  rotate = false,
+  kind: "timeline" | "gallery" | "guest" = "timeline",
+  fileIds: string[] = [],
+) {
   await ready();
   assertManager(actor);
   const now = nowIso();
-  if (rotate) run("UPDATE share_links SET revoked_at = ? WHERE job_id = ? AND revoked_at IS NULL", now, job.id);
-  const existing = one("SELECT id, token, created_at FROM share_links WHERE job_id = ? AND revoked_at IS NULL", job.id);
-  if (existing && !rotate) return existing;
+  if (rotate) run("UPDATE share_links SET revoked_at = ? WHERE job_id = ? AND kind = ? AND revoked_at IS NULL", now, job.id, kind);
+  if (kind !== "gallery") {
+    const existing = one("SELECT id, token, created_at FROM share_links WHERE job_id = ? AND kind = ? AND revoked_at IS NULL", job.id, kind);
+    if (existing && !rotate) return existing;
+  }
   const token = newSecret(32);
   const id = randomUUID();
-  run("INSERT INTO share_links (id, job_id, token, created_by, created_at) VALUES (?, ?, ?, ?, ?)", id, job.id, token, actor.id, now);
-  return { id, token, created_at: now };
+  run(
+    "INSERT INTO share_links (id, job_id, token, created_by, created_at, kind) VALUES (?, ?, ?, ?, ?, ?)",
+    id,
+    job.id,
+    token,
+    actor.id,
+    now,
+    kind,
+  );
+  for (const fileId of fileIds) run("INSERT OR IGNORE INTO share_items (share_id, file_id) VALUES (?, ?)", id, fileId);
+  return { id, token, created_at: now, kind };
 }
 
 export async function revokeShare(actor: User, job: Job) {

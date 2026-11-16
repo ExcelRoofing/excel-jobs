@@ -23,6 +23,39 @@ Demo customers, streets, and crew in the sample data are fictional.
 - **S3 or Cloudflare R2.** The code is in the app. Default storage is the server disk. Set `STORAGE=s3` when the disk gets tight.
 - **Phone push.** Works after a person taps “Turn on phone alerts”. The server creates `data/vapid.json` on first use if you do not set keys. iPhone needs Add to Home Screen, and iOS 16.4 or newer. Android can also retry uploads in the background. On iPhone, queued photos upload the next time the app is opened with signal.
 
+## CompanyCam parity
+
+CompanyCam (companycam.com, as of November 2026) is the reference for the photo side. This is what a roofing crew and the office use every day, and where Excel Jobs stands.
+
+| CompanyCam feature | Excel Jobs |
+| --- | --- |
+| Projects on a map, one pin per address | Matched. The Map screen pins every job. Known demo addresses are placed around Maple Ridge. Other addresses are looked up when the network allows. |
+| Fast camera, burst, video, date/time/GPS/user stamp | Matched for photos, including a burst of 3 and your name on the stamp. Video records up to about 1 minute or 40 MB. The date, place, and name are saved with the video and shown on the card. They are not burned into the video file. |
+| Draw, arrows, text, measurements on a copy | Matched. Markup saves a copy. The original stays. The measurement is a length you type (for example 12 ft), not a LiDAR reading. |
+| Before and after, side by side | Matched. Pick two photos. The app saves one combined image tagged Before and after. |
+| Tags and filters | Matched. One main tag files the photo. Extra tags can be added in bulk. Filter on the job and in All photos. |
+| Photo comments and @mentions | Matched on each photo. |
+| Checklists with photo-required steps, and templates | Matched. Roof closeout and skylight templates are included. A required step will not complete without a photo. You can save a job checklist as a new template. |
+| Project timeline | Matched. Each job has a Timeline. Filter it to today. |
+| Photo report PDF with logo and captions | Matched. Pick photos, title the report, download a PDF with the Excel mark, address, and captions. |
+| Gallery and live timeline links, revocable | Matched. The live timeline shows what you turn on for the customer and keeps updating. A gallery is only the photos you tick. Turn a link off from the job. |
+| Documents on the job | Matched. |
+| Collaborators and guest access | Matched for subs (crew on the job) and a guest link. The guest can view, comment, and add a photo without an account. |
+| Office activity feed | Matched. Activity lists photos, comments, checklist steps, and reports. |
+| Search photos by tag, date, person, job | Matched on All photos. |
+| Bulk select: move, tag, download, share, delete | Matched for office on All photos. |
+| Offline capture, upload when the signal returns | Matched. The phone keeps the photo and sends it later. Android can also ask the browser to retry in the background. iPhone sends on the next open with signal. |
+| Starred photos | Matched. Star a photo, then filter Starred. |
+| Google Drive copy of media | Matched when `DRIVE_SYNC=on`. Photos, video, markups, before-and-after images, and report PDFs use the same job/tag folders. Admin can press “Copy waiting files to Drive” on More. |
+
+Left out on purpose:
+
+- LiDAR measuring, text scanning, and dual video. Those need a native phone app and special sensors. Typed measurements cover the roofing case.
+- AI pages, AI checklists, and AI photo summaries. CompanyCam sells those as credits. This version does not call an AI service.
+- Card payments, price book, and proposals. CompanyCam payments are for US companies. Excel already keeps quotes and invoices as documents.
+- Signatures on documents, project boards, user groups, and the marketing portfolio (Showcase). The daily work is covered by checklists, the map, job members, and the customer link.
+- A 10-minute video cap. Clips stop around one minute so a weak cell signal can still upload them.
+
 ## Not built yet (the database already has room)
 
 - Sync from Roofr or GoHighLevel (`jobs.source`, `jobs.source_id`, `jobs.source_url`).

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CaptureFlow } from "@/components/CaptureFlow";
+import { FastCamera } from "@/components/FastCamera";
 import { getCurrentUser } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n";
 import { tagLabel } from "@/lib/labels";
@@ -21,6 +22,7 @@ export default async function CapturePage({ params }: { params: Promise<{ id: st
       <Link href={`/jobs/${id}`}>{t("backToJob")}</Link>
       <h1>{t("captureTitle")}</h1>
       <p className="kicker">{job.name}</p>
+      <FastCamera jobId={id} tags={tags} userName={user.name} />
       <CaptureFlow jobId={id} tags={tags} />
     </div>
   );

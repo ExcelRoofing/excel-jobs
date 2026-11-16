@@ -1,7 +1,7 @@
 import type { Locale } from "./types";
 import { formatStamp } from "./time";
 
-export async function stampPhoto(file: Blob, locale: Locale, geo: { lat: number; lng: number } | null) {
+export async function stampPhoto(file: Blob, locale: Locale, geo: { lat: number; lng: number } | null, userName?: string) {
   const bitmap = await createImageBitmap(file);
   const maxSide = 2000;
   const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
@@ -21,7 +21,8 @@ export async function stampPhoto(file: Blob, locale: Locale, geo: { lat: number;
   ctx.fillStyle = "#ffffff";
   ctx.font = `700 ${Math.round(bar * 0.28)}px "Atkinson Hyperlegible", sans-serif`;
   const where = geo ? `${geo.lat.toFixed(5)}, ${geo.lng.toFixed(5)}` : "GPS off";
-  ctx.fillText(`Excel Jobs   ${formatStamp(new Date(), locale)}`, 16, height + bar * 0.46);
+  const who = (userName || "Excel Jobs").slice(0, 28);
+  ctx.fillText(`${who}   ${formatStamp(new Date(), locale)}`, 16, height + bar * 0.46);
   ctx.font = `400 ${Math.round(bar * 0.22)}px "Atkinson Hyperlegible", sans-serif`;
   ctx.fillStyle = "#f4d6c4";
   ctx.fillText(where, 16, height + bar * 0.8);

@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { canManage } from "@/lib/constants";
 import { getI18n } from "@/lib/i18n";
 import { errorKey } from "@/lib/i18n/translate";
-import { activeShare, canSeeJob, getJob, listFiles } from "@/lib/queries";
+import { activeShare, canSeeJob, getJob, listFiles, rows } from "@/lib/queries";
 import { appOrigin } from "@/lib/origin";
 import { formatWhen } from "@/lib/time";
 import { headers } from "next/headers";
@@ -69,7 +69,27 @@ export default async function SharePage({
           <button className="btn primary block" type="submit">{t("turnOnLink")}</button>
         </form>
       )}
-      <p className="help">{t("portalRemember")}</p>
+      <p className="help">{t("timelineHelp")}</p>
+      <p className="help">{t("galleryHelp")}</p>
+      <form className="card stack" action={`/api/jobs/${id}/share`} method="post">
+        <input type="hidden" name="kind" value="gallery" />
+        <h2>{t("makeGallery")}</h2>
+        {files.filter((file) => file.mime.startsWith("image/")).map((file) => (
+          <label key={file.id} className="check">
+            <input type="checkbox" name="fileId" value={file.id} />
+            <span>{file.note || file.filename}</span>
+          </label>
+        ))}
+        <button className="btn dark" type="submit">{t("makeGallery")}</button>
+      </form>
+      <form action={`/api/jobs/${id}/share`} method="post">
+        <input type="hidden" name="kind" value="guest" />
+        <button className="btn ghost block" type="submit">{t("makeGuest")}</button>
+      </form>
+      <p className="help">{t("guestHelp")}</p>
+      {rows("SELECT token, kind FROM share_links WHERE job_id = ? AND revoked_at IS NULL", id).map((link) => (
+        <p key={String(link.token)} className="mono">{String(link.kind)} · {origin}/portal/{String(link.token)}</p>
+      ))}
     </div>
   );
 }

@@ -2,7 +2,8 @@ export type Role = "admin" | "office" | "crew";
 export type Locale = "en" | "fr";
 export type Division = "roofing" | "skylights" | "solar";
 export type JobStatus = "lead" | "scheduled" | "in_progress" | "complete";
-export type FileKind = "photo" | "document" | "chat";
+export type FileKind = "photo" | "document" | "chat" | "video" | "comparison" | "markup" | "report";
+export type ShareKind = "timeline" | "gallery" | "guest";
 
 export type User = {
   id: string;
@@ -43,6 +44,8 @@ export type Job = {
   sourceId: string | null;
   sourceUrl: string | null;
   sourceSyncedAt: string | null;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 export type JobListItem = Job & {
@@ -89,6 +92,9 @@ export type JobFile = {
   driveSyncedAt: string | null;
   driveError: string | null;
   clientId: string | null;
+  derivedFromId: string | null;
+  durationSeconds: number | null;
+  starred: boolean;
 };
 
 export type ChatMessage = {
@@ -137,6 +143,7 @@ export type ShareRow = {
   createdBy: string;
   createdAt: string;
   revokedAt: string | null;
+  kind: ShareKind;
 };
 
 export type ChatListItem = {

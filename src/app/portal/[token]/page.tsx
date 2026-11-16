@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { COMPANY } from "@/lib/constants";
 import { getI18n } from "@/lib/i18n";
 import { divisionKey, statusKey } from "@/lib/labels";
-import { getJob, shareByToken, visiblePortalFiles } from "@/lib/queries";
+import { getJob, listTags, shareByToken, visiblePortalFiles } from "@/lib/queries";
+import { filesForShare } from "@/lib/media";
 import { addressLine, mapsHref } from "@/lib/safe";
 import { formatWhen } from "@/lib/time";
 import { STATUSES } from "@/lib/constants";
@@ -31,7 +32,8 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
   }
   const job = await getJob(share.jobId);
   if (!job) notFound();
-  const files = await visiblePortalFiles(job.id);
+  const files = share.kind === "gallery" ? await filesForShare(share.id) : await visiblePortalFiles(job.id);
+  const tags = share.kind === "guest" ? await listTags(false) : [];
   const photos = files.filter((file) => file.kind === "photo");
   const docs = files.filter((file) => file.kind === "document");
   const full = addressLine(job.address, job.city);
@@ -56,7 +58,7 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
         </div>
       </header>
       <section className="stack" style={{ padding: 18 }}>
-        <p className="help">{t("privateLink")}</p>
+        <p className="help">{share.kind === "guest" ? t("guestPage") : share.kind === "gallery" ? t("galleryHelp") : t("privateLink")}</p>
         <p>{t("divisionIs", { division: t(divisionKey(job.division)) })}</p>
         <div className="row">
           <a className="btn dark" href={COMPANY.phoneHref}>{t("callOffice")}</a>
@@ -77,6 +79,19 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
             <span>{t("downloadThis")}</span>
           </a>
         ))}
+        {share.kind === "guest" ? (
+          <form className="card stack" action={`/api/portal/${token}/guest`} method="post" encType="multipart/form-data">
+            <h2>{t("guestUpload")}</h2>
+            <label className="field"><span>{t("yourNameGuest")}</span><input name="name" required /></label>
+            <label className="field"><span>{t("pickTag")}</span>
+              <select name="tagId" required defaultValue={tags[0]?.id || ""}>
+                {tags.map((tag) => <option key={tag.id} value={tag.id}>{locale === "fr" ? tag.nameFr : tag.nameEn}</option>)}
+              </select>
+            </label>
+            <input name="file" type="file" accept="image/*" capture="environment" required />
+            <button className="btn primary" type="submit">{t("upload")}</button>
+          </form>
+        ) : null}
         <p>{t("thanksLine")}</p>
         <p className="help">{t("questionsCall")}<br />{COMPANY.address}</p>
         <p className="help">{t("madeBy")}</p>

@@ -55,6 +55,7 @@ export default async function PhotosPage({
           return (
             <article key={file.id} className="card stack">
               <a href={`/api/files/${file.id}`}><img src={`/api/files/${file.id}`} alt={file.note || t("photoAlt")} /></a>
+              <Link href={`/jobs/${id}/photos/${file.id}`}>{t("markup")}</Link>
               <div className="row">
                 <span className="pill">{label}</span>
                 <span className={file.customerVisible ? "pill complete" : "pill"}>{file.customerVisible ? t("onCustomerPage") : t("teamOnly")}</span>
