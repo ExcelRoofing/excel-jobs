@@ -61,6 +61,8 @@ function mapJob(row: Record<string, unknown>): Job {
     sourceId: s(row.source_id),
     sourceUrl: s(row.source_url),
     sourceSyncedAt: s(row.source_synced_at),
+    latitude: n(row.latitude),
+    longitude: n(row.longitude),
   };
 }
 
@@ -102,6 +104,9 @@ function mapFile(row: Record<string, unknown>): JobFile {
     driveSyncedAt: s(row.drive_synced_at),
     driveError: s(row.drive_error),
     clientId: s(row.client_id),
+    derivedFromId: s(row.derived_from_id),
+    durationSeconds: n(row.duration_seconds),
+    starred: b(row.starred),
   };
 }
 
@@ -423,6 +428,7 @@ function mapShare(row: Record<string, unknown>): ShareRow {
     createdBy: String(row.created_by),
     createdAt: String(row.created_at),
     revokedAt: s(row.revoked_at),
+    kind: row.kind === "gallery" || row.kind === "guest" ? row.kind : "timeline",
   };
 }
 

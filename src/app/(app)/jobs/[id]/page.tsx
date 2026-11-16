@@ -46,6 +46,14 @@ export default async function JobPage({
       </div>
       <Link className="btn primary hero-btn" href={`/jobs/${id}/capture`}>{t("takePhoto")}</Link>
       <div className="actions two">
+        <Link className="btn ghost" href={`/jobs/${id}/feed`}>{t("feed")}</Link>
+        <Link className="btn ghost" href={`/jobs/${id}/checklists`}>{t("checklists")}</Link>
+        <Link className="btn ghost" href={`/jobs/${id}/report`}>{t("report")}</Link>
+        <Link className="btn ghost" href={`/jobs/${id}/compare`}>{t("beforeAfter")}</Link>
+        <Link className="btn ghost" href="/map">{t("map")}</Link>
+        <Link className="btn ghost" href={`/photos?job=${id}`}>{t("allPhotos")}</Link>
+      </div>
+      <div className="actions two">
         <Link className="btn dark" href={`/jobs/${id}/chat`}>{t("jobChat")}</Link>
         <Link className="btn ghost" href={`/jobs/${id}/photos`}>{t("jobPhotos")} · {photos.length}</Link>
         <Link className="btn ghost" href={`/jobs/${id}/files`}>{t("jobFiles")}</Link>

@@ -9,3 +9,5 @@ tsconfig.tsbuildinfo
 playwright-report
 test-results
 .DS_Store
+deploy/rclone/*
+!deploy/rclone/.gitkeep

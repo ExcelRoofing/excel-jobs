@@ -101,6 +101,7 @@ export function Shell({
       {hideNav ? null : (
         <nav className="nav" aria-label={t("navLabel")}>
           {item("/jobs", t("jobs"), "jobs")}
+          {item("/map", t("map"), "map")}
           {item("/chats", t("chats"), "chats", counts.chats)}
           {item("/alerts", t("alerts"), "alerts", counts.alerts)}
           {item("/more", t("more"), "more")}
@@ -118,6 +119,14 @@ function Icon({ name }: { name: string }) {
       <svg {...common}>
         <path d="M4 15 L16 5 L28 15" />
         <path d="M8 15 V27 H24 V15" />
+      </svg>
+    );
+  }
+  if (name === "map") {
+    return (
+      <svg {...common}>
+        <path d="M6 10 L14 8 L18 12 L26 8 V22 L18 26 L14 22 L6 26 Z" />
+        <path d="M14 8 V22 M18 12 V26" />
       </svg>
     );
   }

@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { DEFAULT_TAGS } from "./constants";
-import { run, tx } from "./db";
+import { one, rows, run, tx } from "./db";
 import { hashPassword, newSecret } from "./password";
 import { simplePdf } from "./pdf";
 import { renderScene, type SceneKind } from "./png";
@@ -316,4 +316,95 @@ export async function seedIfEmpty() {
   );
 
   vapidPublicKey();
+}
+
+export function seedExtras() {
+  const pins: [RegExp, number, number][] = [
+    [/harbour demo/i, 49.2194, -122.5986],
+    [/lumiere demo/i, 49.2261, -122.6012],
+    [/panel demo/i, 49.104, -122.659],
+    [/rain demo/i, 49.221, -122.69],
+    [/wall demo/i, 49.262, -122.781],
+  ];
+  const jobs = rowsSafe();
+  for (const job of jobs) {
+    if (job.latitude != null) continue;
+    const hit = pins.find((pin) => pin[0].test(String(job.address)));
+    if (hit) run("UPDATE jobs SET latitude = ?, longitude = ?, geocoded_at = ? WHERE id = ?", hit[1], hit[2], new Date().toISOString(), String(job.id));
+  }
+  if (!one("SELECT id FROM tags WHERE slug = 'before-after'")) {
+    const sort = Number(one("SELECT COALESCE(MAX(sort),0)+1 AS n FROM tags")?.n || 11);
+    run("INSERT INTO tags (id, name_en, name_fr, slug, sort, active) VALUES (?, 'Before and after', 'Avant et après', 'before-after', ?, 1)", randomUUID(), sort);
+  }
+  run(`INSERT INTO file_tags (file_id, tag_id)
+       SELECT id, tag_id FROM files WHERE tag_id IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM file_tags ft WHERE ft.file_id = files.id AND ft.tag_id = files.tag_id)`);
+  if (!one("SELECT id FROM labels LIMIT 1")) {
+    const labels = [
+      ["Warranty", "Garantie", "#1c7c4a"],
+      ["Insurance", "Assurance", "#1d6f99"],
+      ["Emergency", "Urgence", "#9d2c2c"],
+      ["New build", "Construction neuve", "#d4652f"],
+    ];
+    labels.forEach((label, index) => {
+      run("INSERT INTO labels (id, name_en, name_fr, color, sort) VALUES (?, ?, ?, ?, ?)", randomUUID(), label[0], label[1], label[2], index + 1);
+    });
+  }
+  if (!one("SELECT id FROM checklist_templates LIMIT 1")) {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    run("INSERT INTO checklist_templates (id, name_en, name_fr, created_at) VALUES (?, 'Roof closeout', 'Fin de toiture', ?)", id, now);
+    const items = [
+      ["Front slope before", "Versant avant, avant les travaux", 1],
+      ["Flashing and valleys", "Solins et noues", 1],
+      ["Ridge and vents", "Faîte et évents", 1],
+      ["Site cleaned up", "Chantier nettoyé", 1],
+      ["Customer walkthrough", "Visite avec le client", 0],
+    ];
+    items.forEach((item, index) => {
+      run(
+        "INSERT INTO checklist_template_items (id, template_id, sort, title_en, title_fr, photo_required) VALUES (?, ?, ?, ?, ?, ?)",
+        randomUUID(),
+        id,
+        index + 1,
+        item[0],
+        item[1],
+        item[2],
+      );
+    });
+    const sky = randomUUID();
+    run("INSERT INTO checklist_templates (id, name_en, name_fr, created_at) VALUES (?, 'Skylight install', 'Pose de puits de lumière', ?)", sky, now);
+    run(
+      "INSERT INTO checklist_template_items (id, template_id, sort, title_en, title_fr, photo_required) VALUES (?, ?, 1, 'Opening before the curb', 'Ouverture avant le cadre', 1)",
+      randomUUID(),
+      sky,
+    );
+    run(
+      "INSERT INTO checklist_template_items (id, template_id, sort, title_en, title_fr, photo_required) VALUES (?, ?, 2, 'Flashing and finished curb', 'Solin et cadre fini', 1)",
+      randomUUID(),
+      sky,
+    );
+  }
+  if (!one("SELECT id FROM activity LIMIT 1")) {
+    const recent = rowsSafeFiles();
+    for (const file of recent) {
+      run(
+        "INSERT INTO activity (id, user_id, job_id, file_id, kind, summary, created_at) VALUES (?, ?, ?, ?, 'photo', ?, ?)",
+        randomUUID(),
+        file.uploaded_by ? String(file.uploaded_by) : null,
+        String(file.job_id),
+        String(file.id),
+        "Photo added",
+        String(file.created_at),
+      );
+    }
+  }
+}
+
+function rowsSafe() {
+  return rows("SELECT id, address, latitude FROM jobs");
+}
+
+function rowsSafeFiles() {
+  return rows("SELECT id, job_id, uploaded_by, created_at FROM files WHERE kind = 'photo' ORDER BY created_at DESC LIMIT 12");
 }

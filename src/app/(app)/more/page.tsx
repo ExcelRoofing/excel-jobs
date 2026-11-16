@@ -50,6 +50,9 @@ export default async function MorePage({ searchParams }: { searchParams: Promise
       {canManage(user.role) ? <Link className="btn dark block" href="/team">{t("openTeam")}</Link> : null}
       {canAdmin(user.role) ? <Link className="btn ghost block" href="/tags">{t("openTags")}</Link> : null}
       <Link className="btn ghost block" href="/outbox">{t("openOutbox")}</Link>
+      <Link className="btn ghost block" href="/photos">{t("allPhotos")}</Link>
+      <Link className="btn ghost block" href="/activity">{t("activity")}</Link>
+      <Link className="btn ghost block" href="/map">{t("map")}</Link>
       <PhoneTools />
       <section className="card stack">
         <h2>{t("driveTitle")}</h2>
@@ -57,6 +60,11 @@ export default async function MorePage({ searchParams }: { searchParams: Promise
         <p className="help">{storage === "s3" ? t("storageS3") : t("storageLocal")}</p>
         <p className="help">{t("serverFilingHelp")}</p>
         <p className="help">{t("setupDrive")}</p>
+        {user.role === "admin" ? (
+          <form action="/api/drive/sync" method="post">
+            <button className="btn dark" type="submit">{t("syncDriveAll")}</button>
+          </form>
+        ) : null}
       </section>
       <details className="helpbox">
         <summary>{t("howTitle")}</summary>

@@ -15,7 +15,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   try {
     const upload = input.form?.get("file");
     if (!(upload instanceof File) || upload.size === 0) throw new AppError("file_missing");
-    const kind = field(input, "kind") === "photo" ? "photo" : field(input, "kind") === "chat" ? "chat" : "document";
+    const requested = field(input, "kind");
+    const kind = requested === "photo" || requested === "chat" || requested === "video" || requested === "markup" || requested === "comparison" || requested === "report" ? requested : "document";
     const file = await saveUploadedFile({
       actor: auth.user,
       job,
@@ -31,6 +32,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       gpsAccuracy: num(field(input, "gpsAccuracy")),
       customerVisible: field(input, "customerVisible") === "1" || field(input, "customerVisible") === "on",
       clientId: field(input, "clientId") || null,
+      derivedFromId: field(input, "derivedFrom") || null,
     });
     if (input.asJson) return json({ file });
     return redirectTo(request, next);

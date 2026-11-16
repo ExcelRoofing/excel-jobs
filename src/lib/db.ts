@@ -220,13 +220,195 @@ function migrate(db: DatabaseSync) {
     CREATE INDEX IF NOT EXISTS idx_jobs_updated ON jobs(updated_at);
   `);
   db.exec("PRAGMA user_version = 1;");
+  upgrade(db);
+}
+
+function columnNames(db: DatabaseSync, table: string) {
+  return (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((column) => column.name);
+}
+
+function addColumn(db: DatabaseSync, table: string, column: string, ddl: string) {
+  if (!columnNames(db, table).includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+}
+
+function upgrade(db: DatabaseSync) {
+  addColumn(db, "jobs", "latitude", "REAL");
+  addColumn(db, "jobs", "longitude", "REAL");
+  addColumn(db, "jobs", "geocoded_at", "TEXT");
+  addColumn(db, "share_links", "kind", "TEXT NOT NULL DEFAULT 'timeline'");
+  addColumn(db, "share_links", "label", "TEXT");
+  addColumn(db, "files", "derived_from_id", "TEXT");
+  addColumn(db, "files", "duration_seconds", "REAL");
+
+  const tableSql = String((db.prepare("SELECT sql FROM sqlite_master WHERE name = 'files'").get() as { sql: string }).sql);
+  if (!tableSql.includes("'video'")) {
+    db.exec("PRAGMA foreign_keys = OFF");
+    db.exec("BEGIN");
+    try {
+      db.exec(`
+        CREATE TABLE files_v2 (
+          id TEXT PRIMARY KEY,
+          job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+          kind TEXT NOT NULL CHECK(kind IN ('photo','document','chat','video','comparison','markup','report')),
+          storage_key TEXT NOT NULL,
+          filename TEXT NOT NULL,
+          mime TEXT NOT NULL,
+          size INTEGER NOT NULL,
+          tag_id TEXT REFERENCES tags(id),
+          note TEXT,
+          taken_at TEXT,
+          latitude REAL,
+          longitude REAL,
+          gps_accuracy REAL,
+          customer_visible INTEGER NOT NULL DEFAULT 0,
+          uploaded_by TEXT,
+          created_at TEXT NOT NULL,
+          library_path TEXT,
+          drive_file_id TEXT,
+          drive_path TEXT,
+          drive_synced_at TEXT,
+          drive_error TEXT,
+          client_id TEXT,
+          ai_tags TEXT,
+          ai_status TEXT,
+          derived_from_id TEXT,
+          duration_seconds REAL
+        );
+      `);
+      db.exec(`
+        INSERT INTO files_v2 (
+          id, job_id, kind, storage_key, filename, mime, size, tag_id, note, taken_at,
+          latitude, longitude, gps_accuracy, customer_visible, uploaded_by, created_at,
+          library_path, drive_file_id, drive_path, drive_synced_at, drive_error, client_id,
+          ai_tags, ai_status, derived_from_id, duration_seconds
+        )
+        SELECT
+          id, job_id, kind, storage_key, filename, mime, size, tag_id, note, taken_at,
+          latitude, longitude, gps_accuracy, customer_visible, uploaded_by, created_at,
+          library_path, drive_file_id, drive_path, drive_synced_at, drive_error, client_id,
+          ai_tags, ai_status, derived_from_id, duration_seconds
+        FROM files;
+      `);
+      db.exec("DROP TABLE files");
+      db.exec("ALTER TABLE files_v2 RENAME TO files");
+      db.exec("CREATE UNIQUE INDEX IF NOT EXISTS files_client_id ON files(client_id) WHERE client_id IS NOT NULL");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_files_job ON files(job_id, created_at)");
+      db.exec("COMMIT");
+    } catch (error) {
+      try {
+        db.exec("ROLLBACK");
+      } catch {
+        /* already closed */
+      }
+      db.exec("PRAGMA foreign_keys = ON");
+      throw error;
+    }
+    db.exec("PRAGMA foreign_keys = ON");
+  }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS file_tags (
+      file_id TEXT NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+      tag_id TEXT NOT NULL REFERENCES tags(id),
+      PRIMARY KEY (file_id, tag_id)
+    );
+    CREATE TABLE IF NOT EXISTS file_stars (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      file_id TEXT NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (user_id, file_id)
+    );
+    CREATE TABLE IF NOT EXISTS file_comments (
+      id TEXT PRIMARY KEY,
+      file_id TEXT NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+      user_id TEXT REFERENCES users(id),
+      guest_name TEXT,
+      body TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS file_comment_mentions (
+      comment_id TEXT NOT NULL REFERENCES file_comments(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      PRIMARY KEY (comment_id, user_id)
+    );
+    CREATE TABLE IF NOT EXISTS labels (
+      id TEXT PRIMARY KEY,
+      name_en TEXT NOT NULL,
+      name_fr TEXT NOT NULL,
+      color TEXT NOT NULL,
+      sort INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS job_labels (
+      job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+      label_id TEXT NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
+      PRIMARY KEY (job_id, label_id)
+    );
+    CREATE TABLE IF NOT EXISTS checklist_templates (
+      id TEXT PRIMARY KEY,
+      name_en TEXT NOT NULL,
+      name_fr TEXT NOT NULL,
+      created_by TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS checklist_template_items (
+      id TEXT PRIMARY KEY,
+      template_id TEXT NOT NULL REFERENCES checklist_templates(id) ON DELETE CASCADE,
+      sort INTEGER NOT NULL,
+      title_en TEXT NOT NULL,
+      title_fr TEXT NOT NULL,
+      instructions_en TEXT,
+      instructions_fr TEXT,
+      photo_required INTEGER NOT NULL DEFAULT 1
+    );
+    CREATE TABLE IF NOT EXISTS checklists (
+      id TEXT PRIMARY KEY,
+      job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+      template_id TEXT,
+      name TEXT NOT NULL,
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS checklist_items (
+      id TEXT PRIMARY KEY,
+      checklist_id TEXT NOT NULL REFERENCES checklists(id) ON DELETE CASCADE,
+      sort INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      instructions TEXT,
+      photo_required INTEGER NOT NULL DEFAULT 1,
+      completed_at TEXT,
+      completed_by TEXT
+    );
+    CREATE TABLE IF NOT EXISTS checklist_item_files (
+      item_id TEXT NOT NULL REFERENCES checklist_items(id) ON DELETE CASCADE,
+      file_id TEXT NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+      PRIMARY KEY (item_id, file_id)
+    );
+    CREATE TABLE IF NOT EXISTS share_items (
+      share_id TEXT NOT NULL REFERENCES share_links(id) ON DELETE CASCADE,
+      file_id TEXT NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+      PRIMARY KEY (share_id, file_id)
+    );
+    CREATE TABLE IF NOT EXISTS activity (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      job_id TEXT,
+      file_id TEXT,
+      kind TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_activity_time ON activity(created_at);
+    CREATE INDEX IF NOT EXISTS idx_comments_file ON file_comments(file_id, created_at);
+  `);
 }
 
 export function ready() {
   if (!globalDb.__excelReady) {
     openDatabase();
-    globalDb.__excelReady = import("./seed")
-      .then((mod) => mod.seedIfEmpty())
+    globalDb.__excelReady = import("./seed").then(async (mod) => {
+        await mod.seedIfEmpty();
+        mod.seedExtras();
+      })
       .catch((error) => {
         globalDb.__excelReady = undefined;
         throw error;

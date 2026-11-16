@@ -10,6 +10,7 @@
     "build": "NEXT_TELEMETRY_DISABLED=1 NODE_OPTIONS='--disable-warning=ExperimentalWarning' next build",
     "start": "NEXT_TELEMETRY_DISABLED=1 NODE_OPTIONS='--disable-warning=ExperimentalWarning' next start",
     "backup": "NODE_OPTIONS='--disable-warning=ExperimentalWarning' node scripts/backup.mjs",
+    "backup:offsite": "BACKUP_ONCE=1 sh scripts/backup-offsite.sh",
     "icons": "NODE_OPTIONS='--disable-warning=ExperimentalWarning' node --experimental-strip-types scripts/gen-icons.ts",
     "smoke": "node scripts/smoke.mjs"
   },
@@ -18,7 +19,10 @@
     "@fontsource/atkinson-hyperlegible": "^5.2.5",
     "archiver": "^7.0.1",
     "jose": "^6.0.11",
+    "jpeg-js": "^0.4.4",
     "next": "^15.5.4",
+    "pdf-lib": "^1.17.1",
+    "pngjs": "^7.0.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "server-only": "^0.0.1",
@@ -26,7 +30,9 @@
   },
   "devDependencies": {
     "@types/archiver": "^6.0.3",
+    "@types/jpeg-js": "^0.3.0",
     "@types/node": "^22.15.21",
+    "@types/pngjs": "^6.0.5",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "@types/web-push": "^3.6.4",

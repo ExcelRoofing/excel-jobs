@@ -194,13 +194,15 @@ From the Excel Jobs project folder, after `whatsapp-backup/.env` exists:
 docker compose --profile whatsapp up -d --build
 ```
 
+Compose reads that file with `env_file`. Inside the container, `DATA_DIR` is `/data` and the page is published only on the server's `127.0.0.1:8787`, even if the file says `./data` or `HOST=127.0.0.1` for a laptop.
+
 This does not change the Excel Jobs container. The backup page is only on the server: `http://127.0.0.1:8787/?token=...`.
 
 Do not publish port 8787 to the public internet. If you put Caddy in front of it, require the token and do not leave the QR page open to the world.
 
-The data disk is the Docker volume `whatsapp-backup-data`. That volume holds the WhatsApp login. Back it up with the rest of the server disk. Losing it means scanning the QR again. It does not delete files already in Drive.
+The data disk is the Docker volume `whatsapp-backup-data`. The daily Excel Jobs backup container mounts that volume and copies the WhatsApp login, the queue database, and files still waiting into the same off-server backup as the job photos. Losing the volume without that copy means scanning the QR again. It does not delete files already in Drive.
 
-`docker compose up` without the profile does not start this program.
+`docker compose up` without the profile does not start this program. The daily backup still runs, and skips the WhatsApp folder until the volume has a login.
 
 ## Run it without Docker
 
@@ -269,7 +271,7 @@ There is no per-user fee and no WhatsApp Business API bill, because this does no
 
 - **Meta can block the spare number.** This uses WhatsApp Web through a library called Baileys, not a product Meta sells for this purpose. Their rules do not allow unofficial clients. The chance of a block is why this must be a spare number. If it is blocked, backups stop. Scan a new spare number. Photos already in Drive are still there.
 - **The library is pinned to Baileys 7.0.0-rc14.** That was the current release of the maintained Baileys project when this was added. It is still marked a release candidate. If login breaks after a WhatsApp change, the usual fix is to update this one package and restart.
-- **The session folder is the keys to that WhatsApp.** Anyone who copies `data/session` is logged in as the spare phone. Do not commit it, email it, or leave the server disk world-readable. The admin QR is the same kind of secret. Keep the page on localhost and use `ADMIN_TOKEN`.
+- **The session folder is the keys to that WhatsApp.** Anyone who copies `data/session` is logged in as the spare phone. Do not commit it, email it, or leave the server disk world-readable. The daily off-server backup includes that folder, so the remote has to stay private too. The admin QR is the same kind of secret. Keep the page on localhost and use `ADMIN_TOKEN`.
 - **Customer houses.** These photos will sit in Google Drive. Google's servers may be outside Canada. Turn this on only if the company is fine with that copy. The server in Canada still holds a file only until Drive accepts it.
 - **The spare phone should be turned on now and then.** WhatsApp can log a linked device out if the phone stays offline for a long stretch. If the admin page says logged out, delete the session folder, start the program, and scan the QR again.
 - **Read only means read only in the chat.** The program is written so it cannot send a message, a reaction, a "typing" notice, or a read receipt. People in the group should not see a new message from the backup phone. The phone's linked-devices list will show **Excel Backup**. If a photo has expired on WhatsApp's servers, the library may ask the sender's phone to upload that file again so it can be saved. That request is not a message in the group.

@@ -23,6 +23,39 @@ Demo customers, streets, and crew in the sample data are fictional.
 - **S3 or Cloudflare R2.** The code is in the app. Default storage is the server disk. Set `STORAGE=s3` when the disk gets tight.
 - **Phone push.** Works after a person taps “Turn on phone alerts”. The server creates `data/vapid.json` on first use if you do not set keys. iPhone needs Add to Home Screen, and iOS 16.4 or newer. Android can also retry uploads in the background. On iPhone, queued photos upload the next time the app is opened with signal.
 
+## CompanyCam parity
+
+CompanyCam (companycam.com, as of November 2026) is the reference for the photo side. This is what a roofing crew and the office use every day, and where Excel Jobs stands.
+
+| CompanyCam feature | Excel Jobs |
+| --- | --- |
+| Projects on a map, one pin per address | Matched. The Map screen pins every job. Known demo addresses are placed around Maple Ridge. Other addresses are looked up when the network allows. |
+| Fast camera, burst, video, date/time/GPS/user stamp | Matched for photos, including a burst of 3 and your name on the stamp. Video records up to about 1 minute or 40 MB. The date, place, and name are saved with the video and shown on the card. They are not burned into the video file. |
+| Draw, arrows, text, measurements on a copy | Matched. Markup saves a copy. The original stays. The measurement is a length you type (for example 12 ft), not a LiDAR reading. |
+| Before and after, side by side | Matched. Pick two photos. The app saves one combined image tagged Before and after. |
+| Tags and filters | Matched. One main tag files the photo. Extra tags can be added in bulk. Filter on the job and in All photos. |
+| Photo comments and @mentions | Matched on each photo. |
+| Checklists with photo-required steps, and templates | Matched. Roof closeout and skylight templates are included. A required step will not complete without a photo. You can save a job checklist as a new template. |
+| Project timeline | Matched. Each job has a Timeline. Filter it to today. |
+| Photo report PDF with logo and captions | Matched. Pick photos, title the report, download a PDF with the Excel mark, address, and captions. |
+| Gallery and live timeline links, revocable | Matched. The live timeline shows what you turn on for the customer and keeps updating. A gallery is only the photos you tick. Turn a link off from the job. |
+| Documents on the job | Matched. |
+| Collaborators and guest access | Matched for subs (crew on the job) and a guest link. The guest can view, comment, and add a photo without an account. |
+| Office activity feed | Matched. Activity lists photos, comments, checklist steps, and reports. |
+| Search photos by tag, date, person, job | Matched on All photos. |
+| Bulk select: move, tag, download, share, delete | Matched for office on All photos. |
+| Offline capture, upload when the signal returns | Matched. The phone keeps the photo and sends it later. Android can also ask the browser to retry in the background. iPhone sends on the next open with signal. |
+| Starred photos | Matched. Star a photo, then filter Starred. |
+| Google Drive copy of media | Matched when `DRIVE_SYNC=on`. Photos, video, markups, before-and-after images, and report PDFs use the same job/tag folders. Admin can press “Copy waiting files to Drive” on More. |
+
+Left out on purpose:
+
+- LiDAR measuring, text scanning, and dual video. Those need a native phone app and special sensors. Typed measurements cover the roofing case.
+- AI pages, AI checklists, and AI photo summaries. CompanyCam sells those as credits. This version does not call an AI service.
+- Card payments, price book, and proposals. CompanyCam payments are for US companies. Excel already keeps quotes and invoices as documents.
+- Signatures on documents, project boards, user groups, and the marketing portfolio (Showcase). The daily work is covered by checklists, the map, job members, and the customer link.
+- A 10-minute video cap. Clips stop around one minute so a weak cell signal can still upload them.
+
 ## Not built yet (the database already has room)
 
 - Sync from Roofr or GoHighLevel (`jobs.source`, `jobs.source_id`, `jobs.source_url`).
@@ -88,28 +121,79 @@ Tag folders use the English tag name so the whole company shares one filing lang
 
 ## Deploy
 
-Run **one** Node process. Chat delivery is in-memory on that process. Do not point two copies at the same SQLite file.
+This is the production layout for one Ubuntu 24.04 VPS (the one in Beauharnois is a good fit). Run **one** copy of the app. Chat delivery is in-memory on that process. Do not point two copies at the same SQLite file.
 
-Put the disk in Canada if you can (homeowner photos). A small VPS in Montreal or Toronto is enough.
+Docker Compose does four things:
+
+- `excel-jobs` listens only on `127.0.0.1:3000`. The public internet cannot open that port.
+- `caddy` takes ports 80 and 443, gets a Let's Encrypt certificate for `APP_DOMAIN`, and proxies to the app.
+- `backup` makes a local copy every day and, when `RCLONE_REMOTE` is set, copies it off the server. That copy includes the WhatsApp login when that disk has one.
+- `whatsapp-backup` is optional. `docker compose --profile whatsapp up -d --build` starts it. It listens only on `127.0.0.1:8787` and reads `whatsapp-backup/.env`.
+
+`.env` is passed into the app and the backup container with `env_file`. The WhatsApp service uses `env_file` on `whatsapp-backup/.env`. `DATA_DIR` is forced to `/data` inside those containers so a laptop value of `./data` does not leak in. Photo tags and the two checklist templates are still created on an empty database. Demo people and demo jobs are not, when `SEED_DEMO=off`.
 
 ```bash
-# on the server
 cp .env.example .env
-# edit SESSION_SECRET, APP_URL, DEMO_HINTS=off, COOKIE_SECURE=on
+# fill in the production values from the checklist below
 docker compose up -d --build
 ```
 
-Put Caddy or another HTTPS proxy in front:
+On a laptop, use `npm run dev`. Compose is for the server. To start only the app container: `docker compose up -d excel-jobs`.
+
+## Production checklist
+
+Do these in order on the VPS before real customer photos.
+
+1. Install Docker Engine and the Compose plugin. Open ports 80 and 443 in the OVH firewall. Leave 3000 closed to the public. The compose file already binds it to `127.0.0.1`.
+2. Point DNS for the hostname (for example `jobs.excelroofing.ca`) at the VPS.
+3. Clone the repo and create `.env` from `.env.example`.
+4. Set `SESSION_SECRET` (`openssl rand -base64 48`).
+5. Set `APP_DOMAIN=jobs.excelroofing.ca` and `APP_URL=https://jobs.excelroofing.ca`.
+6. Set `ACME_EMAIL` to a mailbox you read. Caddy uses it for Let's Encrypt.
+7. Set `COOKIE_SECURE=on` and `DEMO_HINTS=off`.
+8. Set `SEED_DEMO=off`, `BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_PASSWORD` (8 or more characters), and `BOOTSTRAP_ADMIN_LOCALE` (`en` or `fr`). The first boot creates that one admin. It does not create Joel, Thedy, Rina, Sam, Alexe, or the sample jobs.
+9. Set the off-server backup (next section) and `BACKUP_REQUIRE_OFFSITE=1`.
+10. `docker compose up -d --build`.
+11. Open `https://APP_DOMAIN`, sign in as the bootstrap admin, and invite the crew from Team.
+12. Optional: `DRIVE_SYNC` and the `GOOGLE_*` keys, `STORAGE=s3` and the `S3_*` keys, and your own `VAPID_*` keys. All of these are read from `.env` inside the container.
+
+No Roofr key, GoHighLevel key, or email provider is required. Invites are links you send yourself.
+
+## Off-server backup
+
+The `backup` container runs `scripts/backup-offsite.sh` every 24 hours. Each run:
+
+1. Copies the database with `VACUUM INTO`, plus `blobs/`, `library/`, and `vapid.json`, into `/data/backups/<timestamp>/`. When the WhatsApp disk has a login, the same folder also gets `whatsapp/`: the session (the spare-phone login), a consistent copy of its queue database, and any `inbox` or `logs` files still waiting to reach Drive. That session is a key to the spare WhatsApp, so the off-server copy has to stay as private as the server disk.
+2. Deletes local backup folders older than `BACKUP_RETENTION_DAYS` (default 30).
+3. If `RCLONE_REMOTE` is set, copies that folder off the server with rclone and deletes remote files older than the same number of days.
+
+A manual run on the server, against the live disk in the volume:
+
+```bash
+docker compose exec backup sh -c 'BACKUP_ONCE=1 /app/scripts/backup-offsite.sh'
+```
+
+On a laptop, `npm run backup` only writes `data/backups/`. `npm run backup:offsite` does the same plus rclone when the remote is set.
+
+S3-compatible storage (OVH Object Storage in Beauharnois, Cloudflare R2, or Backblaze B2) needs no config file. In `.env`:
 
 ```
-jobs.excelroofing.ca {
-  reverse_proxy localhost:3000
-}
+RCLONE_REMOTE=excelbackup:excel-jobs
+RCLONE_CONFIG_EXCELBACKUP_TYPE=s3
+RCLONE_CONFIG_EXCELBACKUP_PROVIDER=Other
+RCLONE_CONFIG_EXCELBACKUP_ENDPOINT=https://s3.bhs.io.cloud.ovh.net
+RCLONE_CONFIG_EXCELBACKUP_ACCESS_KEY_ID=
+RCLONE_CONFIG_EXCELBACKUP_SECRET_ACCESS_KEY=
+RCLONE_CONFIG_EXCELBACKUP_ACL=private
+BACKUP_RETENTION_DAYS=30
+BACKUP_REQUIRE_OFFSITE=1
 ```
 
-Keep `/data` on a real disk. The Docker volume `excel-jobs-data` does that. Back it up. A weekly `npm run backup` (or a copy of the volume) plus a copy off the server is enough to start.
+Google Drive instead: on the server run `rclone config`, name the remote, and put the file at `deploy/rclone/rclone.conf` (that path is gitignored). Then set `RCLONE_REMOTE=thatname:ExcelJobsBackups`. The backup container reads `/config/rclone/rclone.conf`.
 
-Set `APP_URL=https://jobs.excelroofing.ca` so customer links use the public address.
+Until the remote is set, the container still keeps the on-server copies and logs that the off-server copy was skipped. `BACKUP_REQUIRE_OFFSITE=1` makes it exit instead, so Docker restarts it and the failure stays visible. Set that only after a manual run has succeeded.
+
+Photos of people's houses are the thing you cannot lose. Confirm one new folder appears in the remote after the first manual run.
 
 ## Environment
 
@@ -123,9 +207,12 @@ See `.env.example`. The app boots with none of them set.
 | `DEMO_HINTS` | `on` (default) lists demo accounts on the sign-in page. Set `off` before go-live. |
 | `COOKIE_SECURE` | Set `on` behind https. Leave `off` for local http. |
 | `SEED_DEMO` | Default on. Set `off` with the `BOOTSTRAP_ADMIN_*` variables to create one admin and no sample jobs. |
+| `BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_PASSWORD`, `BOOTSTRAP_ADMIN_LOCALE` | The only account created when `SEED_DEMO=off` and the database is empty. Password must be 8 or more characters. |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Optional stable phone-alert keys. Otherwise `data/vapid.json` is created. Back that file up, or subscriptions die when the disk does. |
-| `DRIVE_SYNC` and the `GOOGLE_*` variables | Drive copy. Off by default. |
-| `STORAGE` and the `S3_*` variables | `local` (default) or `s3`. |
+| `DRIVE_SYNC` and the `GOOGLE_*` variables | Drive copy of job files. Off by default. |
+| `STORAGE` and the `S3_*` variables | `local` (default) or `s3` for the live file store. |
+| `APP_DOMAIN`, `ACME_EMAIL` | Hostname and contact for the Caddy Let's Encrypt certificate. |
+| `RCLONE_REMOTE`, `RCLONE_CONFIG_EXCELBACKUP_*`, `BACKUP_RETENTION_DAYS`, `BACKUP_REQUIRE_OFFSITE` | Daily off-server backup. |
 
 ## Google Drive
 
@@ -146,7 +233,7 @@ New uploads then go to `Job name / Tag`. The server copy remains the source of t
 
 ## WhatsApp group backup
 
-A separate small service in `whatsapp-backup/` can sit on this same server. It logs into a spare WhatsApp number (one you add to the job groups), saves photos, videos, voice notes, and documents to Google Drive, and can optionally copy a file onto the matching job here. It never sends chat messages. Setup, cost, and the risk of Meta blocking that spare number are in [whatsapp-backup/README.md](whatsapp-backup/README.md).
+A separate small service in `whatsapp-backup/` can sit on this same server. It logs into a spare WhatsApp number (one you add to the job groups), saves photos, videos, voice notes, and documents to Google Drive, and can optionally copy a file onto the matching job here. It never sends chat messages. Its settings live in `whatsapp-backup/.env`, which Compose passes in with `env_file`. The daily off-server backup includes the WhatsApp login and any files still waiting to upload. Setup, cost, and the risk of Meta blocking that spare number are in [whatsapp-backup/README.md](whatsapp-backup/README.md).
 
 ## Cloudflare R2 or S3
 
@@ -162,21 +249,6 @@ S3_SECRET_ACCESS_KEY=
 ```
 
 If `STORAGE=s3` but the keys are missing, the app keeps using the disk and says so on the admin More page.
-
-## Go-live checklist
-
-1. A server with a disk that is not wiped on restart, preferably in Canada.
-2. HTTPS on a name such as `jobs.excelroofing.ca`.
-3. `SESSION_SECRET` set to a long random string.
-4. `APP_URL` set to that https address.
-5. `COOKIE_SECURE=on`.
-6. `DEMO_HINTS=off`.
-7. Change the password on Joel’s and Thedy’s accounts (More → Change password). Turn off Rina, Sam, and Alexe, or delete the demo database and boot with `SEED_DEMO=off` plus `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD`.
-8. Invite the real crew from Team. Send the link by text.
-9. Optional: Drive keys, an R2 bucket, and your own VAPID keys.
-10. A backup cron. Photos of people’s houses are the thing you cannot lose.
-
-No Roofr key, GoHighLevel key, or email provider is required for this version. Invites are links you send yourself.
 
 ## Hosting cost
 

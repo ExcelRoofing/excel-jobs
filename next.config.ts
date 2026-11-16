@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   serverExternalPackages: ["web-push", "archiver", "@aws-sdk/client-s3"],
   experimental: {
-    serverActions: { bodySizeLimit: "32mb" },
+    serverActions: { bodySizeLimit: "48mb" },
   },
   async headers() {
     return [
