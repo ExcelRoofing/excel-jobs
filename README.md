@@ -144,6 +144,10 @@ GOOGLE_DRIVE_ROOT_FOLDER_ID=the-folder-id
 
 New uploads then go to `Job name / Tag`. The server copy remains the source of truth if Drive is down. The file is still saved, and the job shows that the Drive copy did not finish.
 
+## WhatsApp group backup
+
+A separate small service in `whatsapp-backup/` can sit on this same server. It logs into a spare WhatsApp number (one you add to the job groups), saves photos, videos, voice notes, and documents to Google Drive, and can optionally copy a file onto the matching job here. It never sends chat messages. Setup, cost, and the risk of Meta blocking that spare number are in [whatsapp-backup/README.md](whatsapp-backup/README.md).
+
 ## Cloudflare R2 or S3
 
 When the VPS disk is the wrong place for years of photos:

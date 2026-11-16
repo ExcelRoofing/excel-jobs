@@ -15,5 +15,25 @@ services:
       - excel-jobs-data:/data
     restart: unless-stopped
 
+  # Spare-phone WhatsApp backup. Off unless you ask for it:
+  #   docker compose --profile whatsapp up -d --build
+  # Create whatsapp-backup/.env first. See whatsapp-backup/README.md.
+  whatsapp-backup:
+    profiles: ["whatsapp"]
+    build: ./whatsapp-backup
+    env_file:
+      - path: ./whatsapp-backup/.env
+        required: false
+    environment:
+      DATA_DIR: /data
+      HOST: "0.0.0.0"
+      PORT: "8787"
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - whatsapp-backup-data:/data
+    restart: unless-stopped
+
 volumes:
   excel-jobs-data:
+  whatsapp-backup-data:
