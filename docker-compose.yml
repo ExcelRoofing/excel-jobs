@@ -1,0 +1,19 @@
+services:
+  excel-jobs:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      SESSION_SECRET: ${SESSION_SECRET:-change-me}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      DATA_DIR: /data
+      DEMO_HINTS: ${DEMO_HINTS:-on}
+      COOKIE_SECURE: ${COOKIE_SECURE:-off}
+      DRIVE_SYNC: ${DRIVE_SYNC:-off}
+      STORAGE: ${STORAGE:-local}
+    volumes:
+      - excel-jobs-data:/data
+    restart: unless-stopped
+
+volumes:
+  excel-jobs-data:
